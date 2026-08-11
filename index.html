@@ -604,7 +604,7 @@ function loadFromSharePoint(){
   $('listBody').innerHTML='<div class="empty"><div>◌</div><p style="margin:0">Loading…</p></div>';
   getDrive().then(function(){
     return graph("/sites/"+CFG.siteId+"/lists/"+CFG.listId+
-      "/items?expand=fields&$top=200&$orderby=createdDateTime desc");
+      "/items?$expand=fields&$top=200");
   }).then(function(d){
     var got=(d.value||[]).map(function(it){
       var f=it.fields||{};
@@ -618,6 +618,7 @@ function loadFromSharePoint(){
         size:0, status:'saved', webUrl:it.webUrl
       };
     });
+    got.sort(function(a,b){ return b.at - a.at });
     records=records.filter(function(r){return r.local}).concat(got);
     updateCount(); renderList();
   }).catch(function(e){
@@ -761,11 +762,8 @@ function open(r){
   $('mVideo').removeAttribute('src');
   $('modal').classList.add('show');
   $('mMeta').innerHTML='<div class="chip">Loading video…</div>';
-  getDrive().then(function(drv){
-    return graph("/drives/"+drv+"/items/"+r.driveItemId);
-  }).catch(function(){
-    return graph("/sites/"+CFG.siteId+"/lists/"+CFG.listId+"/items/"+r.itemId+"/driveItem");
-  }).then(function(di){
+  graph("/sites/"+CFG.siteId+"/lists/"+CFG.listId+"/items/"+r.itemId+"/driveItem")
+  .then(function(di){
     $('mVideo').src=di["@microsoft.graph.downloadUrl"];
     $('mMeta').innerHTML='<div class="chip">SIZE <b>'+
       ((di.size||0)/1048576).toFixed(1)+' MB</b></div>';
