@@ -580,19 +580,23 @@ function sendChunks(rec,uploadUrl,fg){
   return next();
 }
 
-/* write the four columns onto the uploaded file */
+/* write the four columns onto the uploaded file.
+   Graph does not return listItem on the upload result, so ask for it. */
 function setFields(item,rec){
-  return graph("/sites/"+CFG.siteId+"/lists/"+CFG.listId+"/items/"+item.listItem.id+"/fields",
+  return getDrive().then(function(drv){
+    return graph("/drives/"+drv+"/items/"+item.id+"/listItem?$select=id");
+  }).then(function(li){
+    return graph("/sites/"+CFG.siteId+"/lists/"+CFG.listId+"/items/"+li.id+"/fields",
     {method:"PATCH", json:{
       PlateNo: rec.plate,
       AgreementNo: rec.agreement,
       InspectionType: rec.type,
       Drivername: rec.driver,
       InspectionDate: rec.at.toISOString()
-    }}).catch(function(e){
-      /* column internal names can differ — surface it rather than fail silently */
-      throw new Error("Video uploaded but details failed to save. "+e.message);
-    });
+    }});
+  }).catch(function(e){
+    throw new Error("Video uploaded but details failed to save. "+e.message);
+  });
 }
 
 /* ---------------- read back ---------------- */
