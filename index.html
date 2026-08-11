@@ -273,6 +273,7 @@ if(typeof msal==='undefined'){
   <div class="summary" style="max-width:420px;margin:0 auto 8px">
     <div class="row"><span>Inspection</span><b id="failedWhat"></b></div>
     <div class="row"><span>Progress</span><b id="failedAt"></b></div>
+    <div class="row"><span>Reason</span><b id="failedErr" style="font-size:11px;line-height:1.5;word-break:break-word;text-align:left;max-width:60%"></b></div>
   </div>
   <p style="font-size:13px;margin:14px 0 26px">Retry now, or move somewhere with better signal
     and retry from My inspections.</p>
@@ -547,6 +548,7 @@ function upload(rec,fg){
     updateCount(); renderList();
     if(fg){ $('uploading').classList.remove('show'); $('done').classList.add('show') }
   }).catch(function(err){
+    console.error('UPLOAD FAILED:',err);
     rec.status='failed'; rec.err=err.message;
     updateCount(); renderList();
     if(fg) showFailed(rec);
@@ -627,6 +629,8 @@ function showFailed(rec){
   $('failed').classList.add('show');
   $('failedWhat').textContent=rec.plate+' · '+rec.agreement+' · '+rec.type;
   $('failedAt').textContent='Stopped at '+(rec.sent||0)+'%';
+  var errEl=$('failedErr');
+  if(errEl) errEl.textContent = rec.err ? rec.err : '';
   $('retryNow').onclick=function(){
     $('failed').classList.remove('show'); $('uploading').classList.add('show');
     $('barFill').style.width=(rec.sent||0)+'%'; $('pct').textContent=(rec.sent||0)+'%';
