@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vesla Vehicle Inspection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --base:#0B0C0E; --panel:#15171B; --panel-2:#1E2126; --line:#2C3037;
+    --gold:#F2C230; --ink:#ECEEF1; --ink-dim:#8B929C;
+    --ready:#5FD39A; --alert:#FF6B5A; --r:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--base);color:var(--ink);
+    font-family:'Archivo',system-ui,sans-serif;font-size:17px;line-height:1.4;
+    -webkit-text-size-adjust:100%}
+
+  header{display:flex;align-items:center;gap:14px;padding:14px 20px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#101216,#0B0C0E);position:sticky;top:0;z-index:20}
+  .shield{width:34px;height:38px;flex:none;background:var(--gold);
+    clip-path:polygon(50% 0,100% 16%,100% 62%,50% 100%,0 62%,0 16%);
+    display:grid;place-items:center;font-weight:800;color:#0B0C0E;font-size:19px}
+  .brand{font-weight:800;letter-spacing:.16em;font-size:15px}
+  .brand span{display:block;font-weight:400;letter-spacing:.06em;font-size:11px;
+    color:var(--ink-dim);margin-top:2px}
+  .who{margin-left:auto;text-align:right;font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--ink-dim);line-height:1.5}
+  .who b{color:var(--gold);font-weight:600}
+
+  /* tabs */
+  nav{display:flex;border-bottom:1px solid var(--line);background:#0B0C0E;
+    position:sticky;top:67px;z-index:19}
+  nav button{flex:1;padding:15px 8px;background:none;border:none;
+    border-bottom:3px solid transparent;color:var(--ink-dim);
+    font-family:'Archivo',sans-serif;font-size:14px;font-weight:600;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+  nav button.on{color:var(--gold);border-bottom-color:var(--gold)}
+  nav button .n{font-family:'JetBrains Mono',monospace;font-size:11px;
+    background:var(--panel-2);padding:2px 7px;border-radius:99px;margin-left:6px}
+
+  main{max-width:900px;margin:0 auto;padding:22px 20px 140px}
+  .view{display:none}.view.on{display:block}
+
+  .grid{display:grid;gap:16px;grid-template-columns:1fr}
+  @media(min-width:720px){.grid{grid-template-columns:1fr 1fr}}
+
+  label{display:block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-dim);font-weight:600;margin-bottom:7px}
+  label i{font-style:normal;color:var(--gold)}
+  input[type=text]{width:100%;padding:16px 15px;background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:var(--r);
+    font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:600;letter-spacing:.04em}
+  input[type=text]::placeholder{color:#4A505A;font-weight:400;letter-spacing:0}
+  input[type=text]:focus{outline:none;border-color:var(--gold);
+    box-shadow:0 0 0 3px rgba(242,194,48,.16)}
+
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .seg button{padding:17px 10px;border-radius:var(--r);border:1px solid var(--line);
+    background:var(--panel);color:var(--ink-dim);font-family:'Archivo',sans-serif;
+    font-size:16px;font-weight:600;cursor:pointer;transition:.15s}
+  .seg button[aria-pressed=true]{background:var(--gold);border-color:var(--gold);
+    color:#0B0C0E;font-weight:800}
+
+  .bay{margin-top:26px;border-radius:18px;border:2px dashed var(--line);
+    background:var(--panel);padding:30px 22px;text-align:center;transition:.2s}
+  .bay.filled{border-style:solid;border-color:var(--ready);background:var(--panel-2)}
+  .bay-eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-dim);font-weight:600}
+  .bay-eyebrow b{color:var(--gold);font-weight:600}
+  .trigger{margin:20px auto 0;width:118px;height:118px;border-radius:50%;
+    border:3px solid var(--gold);background:rgba(242,194,48,.09);
+    display:grid;place-items:center;cursor:pointer;transition:.15s}
+  .trigger:active{transform:scale(.95);background:rgba(242,194,48,.2)}
+  .trigger .dot{width:66px;height:66px;border-radius:50%;background:var(--gold)}
+  .trigger-label{margin-top:14px;font-size:17px;font-weight:800;letter-spacing:.05em}
+  .hint{margin-top:8px;font-size:13px;color:var(--ink-dim);line-height:1.5}
+  video{width:100%;max-height:280px;border-radius:12px;background:#000;margin-top:6px;display:block}
+
+  .readout{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
+  .chip{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;
+    padding:7px 12px;border-radius:8px;background:#0B0C0E;border:1px solid var(--line);
+    color:var(--ink-dim)}
+  .chip b{color:var(--ink);font-weight:600}
+  .chip.ok{border-color:var(--ready)}.chip.ok b{color:var(--ready)}
+  .chip.warn{border-color:var(--alert)}.chip.warn b{color:var(--alert)}
+  .redo{margin-top:14px;background:none;border:1px solid var(--line);color:var(--ink-dim);
+    padding:11px 20px;border-radius:10px;font-family:'Archivo',sans-serif;
+    font-size:14px;font-weight:600;cursor:pointer}
+
+  .dock{position:fixed;left:0;right:0;bottom:0;background:rgba(11,12,14,.97);
+    border-top:1px solid var(--line);padding:12px 20px 18px;z-index:30;backdrop-filter:blur(8px)}
+  .dock.hide{display:none}
+  .dock-inner{max-width:900px;margin:0 auto}
+  .checks{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px}
+  .check{font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;
+    padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:#565D67}
+  .check.on{border-color:var(--ready);color:var(--ready)}
+  .check.on::before{content:"✓ "}
+  .submit{width:100%;padding:20px;border-radius:var(--r);border:none;
+    background:var(--panel-2);color:#4A505A;font-family:'Archivo',sans-serif;
+    font-size:18px;font-weight:800;letter-spacing:.06em;cursor:not-allowed;transition:.2s}
+  .submit.on{background:var(--gold);color:#0B0C0E;cursor:pointer}
+
+  /* uploading */
+  .uploading{display:none;text-align:center;padding:60px 20px}
+  .uploading.show{display:block}
+  .bar{height:8px;background:var(--panel-2);border-radius:99px;overflow:hidden;
+    max-width:420px;margin:24px auto 12px}
+  .bar div{height:100%;width:0;background:var(--gold);transition:width .3s}
+  .pct{font-family:'JetBrains Mono',monospace;color:var(--ink-dim);font-size:13px}
+
+  .done{display:none;text-align:center;padding:56px 20px}
+  .done.show{display:block}
+  .tick{width:84px;height:84px;border-radius:50%;background:var(--ready);
+    display:grid;place-items:center;margin:0 auto 22px;font-size:42px;color:#0B0C0E;font-weight:800}
+  .done h2{font-size:26px;font-weight:800;margin:0 0 8px}
+  .done p{color:var(--ink-dim);margin:0 0 26px;font-size:15px}
+  .again{background:var(--gold);color:#0B0C0E;border:none;padding:17px 34px;
+    border-radius:var(--r);font-family:'Archivo',sans-serif;font-size:16px;
+    font-weight:800;letter-spacing:.05em;cursor:pointer}
+
+  /* list */
+  .empty{text-align:center;padding:70px 20px;color:var(--ink-dim)}
+  .empty div{font-size:44px;margin-bottom:16px;opacity:.35}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    padding:16px;margin-bottom:12px;display:flex;gap:14px;align-items:center;cursor:pointer}
+  .card:active{border-color:var(--gold)}
+  .play{width:46px;height:46px;flex:none;border-radius:50%;background:var(--panel-2);
+    border:1px solid var(--line);display:grid;place-items:center;color:var(--gold);font-size:15px}
+  .meta{flex:1;min-width:0}
+  .meta .top{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:600;
+    margin-bottom:4px}
+  .meta .sub{font-size:12px;color:var(--ink-dim);letter-spacing:.04em}
+  .tag{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+    padding:5px 9px;border-radius:6px;flex:none}
+  .tag.in{background:rgba(95,211,154,.14);color:var(--ready)}
+  .tag.out{background:rgba(242,194,48,.14);color:var(--gold)}
+
+  .modal{display:none;position:fixed;inset:0;background:rgba(5,6,8,.94);z-index:60;
+    padding:20px;overflow:auto}
+  .modal.show{display:block}
+  .modal-inner{max-width:760px;margin:40px auto}
+  .modal h3{font-family:'JetBrains Mono',monospace;font-size:20px;margin:0 0 4px}
+  .modal .when{color:var(--ink-dim);font-size:13px;margin-bottom:18px}
+  .close{width:100%;margin-top:18px;padding:16px;background:var(--panel);
+    border:1px solid var(--line);color:var(--ink);border-radius:var(--r);
+    font-family:'Archivo',sans-serif;font-size:15px;font-weight:600;cursor:pointer}
+
+  select#driver{width:100%;padding:16px 15px;background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:var(--r);
+    font-family:'Archivo',sans-serif;font-size:17px;font-weight:600;
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath fill='%23F2C230' d='M7 9 0 0h14z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 16px center}
+  select#driver:focus{outline:none;border-color:var(--gold);
+    box-shadow:0 0 0 3px rgba(242,194,48,.16)}
+  select#driver option{background:var(--panel);color:var(--ink)}
+
+  .searchbar{margin-bottom:18px}
+  .searchbar input{width:100%;padding:15px 15px;background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:var(--r);
+    font-family:'Archivo',sans-serif;font-size:16px}
+  .searchbar input::placeholder{color:#4A505A}
+  .searchbar input:focus{outline:none;border-color:var(--gold);
+    box-shadow:0 0 0 3px rgba(242,194,48,.16)}
+  .filters{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .filt{padding:9px 16px;border-radius:999px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink-dim);font-family:'Archivo',sans-serif;
+    font-size:13px;font-weight:600;cursor:pointer}
+  .filt.on{background:var(--gold);border-color:var(--gold);color:#0B0C0E;font-weight:800}
+  .resultcount{font-family:'JetBrains Mono',monospace;font-size:12px;
+    color:var(--ink-dim);margin-bottom:12px}
+
+  .pendbar{background:rgba(255,107,90,.12);border:1px solid var(--alert);
+    color:var(--alert);border-radius:var(--r);padding:13px 15px;margin-bottom:14px;
+    font-size:13px;font-weight:600;line-height:1.5}
+  .card.unsaved{border-color:var(--alert)}
+  .card.unsaved .play{color:var(--alert);border-color:var(--alert)}
+  .state{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;
+    margin-top:6px;letter-spacing:.05em}
+  .state.up{color:var(--gold)}
+  .state.bad{color:var(--alert)}
+  .retry{flex:none;background:var(--alert);color:#0B0C0E;border:none;
+    padding:11px 18px;border-radius:9px;font-family:'Archivo',sans-serif;
+    font-size:13px;font-weight:800;letter-spacing:.05em;cursor:pointer}
+
+  .note{margin-top:26px;font-size:12px;color:#4A505A;text-align:center;line-height:1.6}
+  input[type=file]{display:none}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+</head>
+<body>
+
+<div id="app" style="display:none">
+<header>
+  <div class="shield">V</div>
+  <div class="brand">VESLA<span>Vehicle Inspection · VRC</span></div>
+  <div class="who">SIGNED IN<br><b>inspection.vrc</b></div>
+</header>
+
+<nav>
+  <button id="tabNew" class="on">New inspection</button>
+  <button id="tabList">My inspections<span class="n" id="count">0</span></button>
+</nav>
+
+<!-- ============ CAPTURE ============ -->
+<main class="view on" id="viewNew">
+  <div class="grid">
+    <div>
+      <label>Agreement No <i>*</i></label>
+      <input type="text" id="agreement" placeholder="e.g. C11111" autocomplete="off">
+    </div>
+    <div>
+      <label>Plate No <i>*</i></label>
+      <input type="text" id="plate" placeholder="e.g. 41364" autocomplete="off">
+    </div>
+    <div>
+      <label>Inspection type <i>*</i></label>
+      <div class="seg">
+        <button type="button" id="checkin" aria-pressed="false">Check-In</button>
+        <button type="button" id="checkout" aria-pressed="false">Check-Out</button>
+      </div>
+    </div>
+    <div>
+      <label>Driver name <i>*</i></label>
+      <select id="driver">
+        <option value="">Select your name</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="bay" id="bay">
+    <div class="bay-eyebrow" id="bayLabel">Step 5 · <b>Record the walkaround</b></div>
+    <div id="empty">
+      <div class="trigger" id="trigger"><div class="dot"></div></div>
+      <div class="trigger-label">Record video</div>
+      <div class="hint">Opens the camera. Walk once around the vehicle.<br>Up to 7 minutes.</div>
+    </div>
+    <div id="filled" style="display:none">
+      <video id="preview" controls playsinline></video>
+      <div class="readout" id="readout"></div>
+      <button class="redo" id="redo">Record again</button>
+    </div>
+  </div>
+
+  <input type="file" id="file" accept="video/*" capture="environment">
+  <p class="note">Once you submit, the video cannot be changed or deleted.<br>Check it plays before you send it.</p>
+</main>
+
+<!-- ============ UPLOADING ============ -->
+<section class="uploading" id="uploading">
+  <h2 style="font-size:22px;font-weight:800;margin:0">Uploading video</h2>
+  <p style="color:var(--ink-dim);font-size:14px;margin:8px 0 0">Keep the app open until this finishes.</p>
+  <div class="bar"><div id="barFill"></div></div>
+  <div class="pct" id="pct">0%</div>
+</section>
+
+<!-- ============ FAILED ============ -->
+<section class="done" id="failed">
+  <div class="tick" style="background:var(--alert)">!</div>
+  <h2>Upload didn't finish</h2>
+  <p style="margin-bottom:6px">The video is safe on this tablet. Nothing is lost.</p>
+  <div class="summary" style="max-width:420px;margin:0 auto 8px">
+    <div class="row"><span>Inspection</span><b id="failedWhat"></b></div>
+    <div class="row"><span>Progress</span><b id="failedAt"></b></div>
+  </div>
+  <p style="font-size:13px;margin:14px 0 26px">Retry now, or move somewhere with better signal
+    and retry from My inspections.</p>
+  <button class="again" id="retryNow">Retry now</button>
+  <button class="close" id="retryLater" style="max-width:260px;margin:12px auto 0">Retry later</button>
+</section>
+
+<!-- ============ DONE ============ -->
+<section class="done" id="done">
+  <div class="tick">✓</div>
+  <h2>Inspection submitted</h2>
+  <p>Saved to Vehicle Inspection Videos.</p>
+  <button class="again" id="again">New inspection</button>
+</section>
+
+<!-- ============ LIST ============ -->
+<main class="view" id="viewList">
+  <div class="searchbar">
+    <input type="text" id="q" placeholder="Search plate, agreement or driver" autocomplete="off">
+    <div class="filters">
+      <button class="filt on" data-f="All">All</button>
+      <button class="filt" data-f="Check-In">Check-In</button>
+      <button class="filt" data-f="Check-Out">Check-Out</button>
+    </div>
+  </div>
+  <div id="listBody"></div>
+</main>
+
+<div class="dock" id="dock">
+  <div class="dock-inner">
+    <div class="checks">
+      <div class="check" id="c1">Agreement</div>
+      <div class="check" id="c2">Plate</div>
+      <div class="check" id="c3">Type</div>
+      <div class="check" id="c4">Driver</div>
+      <div class="check" id="c5">Video</div>
+    </div>
+    <button class="submit" id="submit" disabled>Submit inspection</button>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-inner">
+    <h3 id="mTitle"></h3>
+    <div class="when" id="mWhen"></div>
+    <video id="mVideo" controls playsinline></video>
+    <div class="readout" id="mMeta" style="justify-content:flex-start"></div>
+    <button class="close" id="mClose">Close</button>
+  </div>
+</div>
+
+
+</div>
+
+<div id="gate" style="display:none;position:fixed;inset:0;background:var(--base);
+  z-index:100;align-items:center;justify-content:center;padding:24px">
+  <div style="text-align:center;max-width:360px">
+    <div class="shield" style="width:64px;height:72px;font-size:34px;margin:0 auto 22px"></div>
+    <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC</p>
+    <button id="signinBtn" class="again" style="width:100%">Sign in</button>
+    <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
+  </div>
+</div>
+
+<script>
+/* ==========================================================
+   DRIVER LIST
+   To add a driver: add a new line inside the brackets below,
+   in quotes, with a comma at the end of the line above.
+   To remove a driver: delete their whole line.
+   ========================================================== */
+var DRIVERS = [
+  "Mohammed Nizamuddin",
+  "Ghulam Murtaza",
+  "Zakir Khan",
+  "Ehsan Zafari",
+  "Haidar Ali",
+  "Ahsan Javed",
+  "Hussain Ali",
+  "Suresh Khadgi",
+  "Devendra Khatri",
+  "Shoaib Khan"
+];
+
+/* ==========================================================
+   VESLA TENANT SETTINGS — do not change unless the site moves
+   ========================================================== */
+var CFG = {
+  clientId : "2ef8c4ed-3d1c-4f1b-a7e0-e8bb9370ffe8",
+  tenantId : "2284246c-5bc3-4b05-9c8e-a1dd46c77e12",
+  hostname : "veslamotors.sharepoint.com",
+  sitePath : "/sites/VehicleInspectionsVRC",
+  siteId   : "veslamotors.sharepoint.com,2cb8b9c8-805e-4332-b9e1-2876cf72b674,9efcecdb-6eef-40e6-bfb1-fb85bc3e4f0c",
+  listId   : "a8435e64-35de-4b0c-8560-e8504c8e67cd",
+  library  : "Vehicle Inspection Videos",
+  chunkMB  : 8
+};
+/* ========================================================== */
+
+(function(){
+var $=function(id){return document.getElementById(id)};
+
+/* ---------------- auth ---------------- */
+var msalApp = new msal.PublicClientApplication({
+  auth:{
+    clientId: CFG.clientId,
+    authority: "https://login.microsoftonline.com/"+CFG.tenantId,
+    redirectUri: window.location.origin + window.location.pathname
+  },
+  cache:{ cacheLocation:"localStorage", storeAuthStateInCookie:true }
+});
+var SCOPES=["Files.ReadWrite.All","Sites.ReadWrite.All","User.Read"];
+var account=null, driveId=null;
+
+function signIn(){
+  return msalApp.loginPopup({scopes:SCOPES}).then(function(res){
+    account=res.account; msalApp.setActiveAccount(account); return account;
+  });
+}
+function token(){
+  return msalApp.acquireTokenSilent({scopes:SCOPES,account:account})
+    .then(function(r){return r.accessToken})
+    .catch(function(){
+      return msalApp.acquireTokenPopup({scopes:SCOPES}).then(function(r){return r.accessToken});
+    });
+}
+function graph(url,opts){
+  return token().then(function(t){
+    opts=opts||{}; opts.headers=opts.headers||{};
+    opts.headers.Authorization="Bearer "+t;
+    if(opts.json){ opts.headers["Content-Type"]="application/json";
+                   opts.body=JSON.stringify(opts.json); delete opts.json }
+    return fetch(url.indexOf("http")===0?url:"https://graph.microsoft.com/v1.0"+url,opts);
+  }).then(function(r){
+    if(!r.ok) return r.text().then(function(t){throw new Error(r.status+" "+t.slice(0,200))});
+    return r.status===204?null:r.json();
+  });
+}
+
+/* find the document library's drive id */
+function getDrive(){
+  if(driveId) return Promise.resolve(driveId);
+  return graph("/sites/"+CFG.siteId+"/drives").then(function(d){
+    var hit=(d.value||[]).filter(function(x){return x.name===CFG.library})[0];
+    if(!hit) throw new Error("Library not found: "+CFG.library);
+    driveId=hit.id; return driveId;
+  });
+}
+
+/* ---------------- boot ---------------- */
+msalApp.handleRedirectPromise().then(function(){
+  var accs=msalApp.getAllAccounts();
+  if(accs.length){ account=accs[0]; msalApp.setActiveAccount(account); ready() }
+  else { $('gate').style.display='flex' }
+});
+
+$('signinBtn').onclick=function(){
+  $('signinBtn').disabled=true; $('signinBtn').textContent='Signing in…';
+  signIn().then(function(){ $('gate').style.display='none'; ready() })
+    .catch(function(e){
+      $('gateErr').textContent='Sign-in failed. '+e.message;
+      $('signinBtn').disabled=false; $('signinBtn').textContent='Sign in';
+    });
+};
+
+function ready(){
+  $('gate').style.display='none';
+  $('app').style.display='block';
+  DRIVERS.forEach(function(n){
+    var o=document.createElement('option'); o.value=n; o.textContent=n;
+    $('driver').appendChild(o);
+  });
+  loadFromSharePoint();
+  sync();
+}
+
+/* ---------------- form state ---------------- */
+var state={type:null,file:null,url:null,dur:null};
+var records=[];      // saved (from SharePoint) + local pending
+
+function pick(t){
+  state.type=t;
+  $('checkin').setAttribute('aria-pressed',t==='Check-In');
+  $('checkout').setAttribute('aria-pressed',t==='Check-Out');
+  sync();
+}
+$('checkin').onclick=function(){pick('Check-In')};
+$('checkout').onclick=function(){pick('Check-Out')};
+$('trigger').onclick=function(){$('file').click()};
+$('redo').onclick=function(){$('file').click()};
+
+$('file').onchange=function(e){
+  var f=e.target.files&&e.target.files[0]; if(!f) return;
+  state.file=f; state.url=URL.createObjectURL(f);
+  $('preview').src=state.url;
+  $('empty').style.display='none'; $('filled').style.display='block';
+  $('bay').classList.add('filled');
+  $('bayLabel').innerHTML='Step 5 · <b>Video recorded</b>';
+  $('readout').innerHTML='<div class="chip">SIZE <b>'+(f.size/1048576).toFixed(1)+' MB</b></div>';
+  $('preview').onloadedmetadata=function(){
+    var d=$('preview').duration;
+    if(isFinite(d)){ state.dur=d;
+      $('readout').insertAdjacentHTML('beforeend',
+        '<div class="chip'+(d>450?' warn':' ok')+'">LENGTH <b>'+fmt(d)+'</b></div>'); }
+  };
+  sync();
+};
+function fmt(d){var m=Math.floor(d/60),s=Math.round(d%60);return m+':'+(s<10?'0':'')+s}
+
+function sync(){
+  var ok={c1:$('agreement').value.trim()!=='',c2:$('plate').value.trim()!=='',
+          c3:state.type!==null,c4:$('driver').value!=='',c5:state.file!==null};
+  var all=true;
+  for(var k in ok){ $(k).classList.toggle('on',ok[k]); if(!ok[k]) all=false }
+  $('submit').disabled=!all; $('submit').classList.toggle('on',all);
+}
+['agreement','plate'].forEach(function(id){$(id).oninput=sync});
+$('driver').onchange=sync;
+
+/* ---------------- submit ---------------- */
+$('submit').onclick=function(){
+  if($('submit').disabled) return;
+  var now=new Date();
+  var rec={
+    id:'local-'+Date.now(),
+    agreement:$('agreement').value.trim().toUpperCase(),
+    plate:$('plate').value.trim().toUpperCase(),
+    type:state.type, driver:$('driver').value,
+    file:state.file, url:state.url, size:state.file.size,
+    dur:state.dur, at:now, status:'uploading', sent:0, local:true
+  };
+  records.unshift(rec);
+  $('viewNew').classList.remove('on'); $('dock').classList.add('hide');
+  $('uploading').classList.add('show'); window.scrollTo(0,0);
+  upload(rec,true);
+};
+
+/* chunked resumable upload */
+function upload(rec,fg){
+  rec.status='uploading'; updateCount(); renderList();
+  var name=(rec.plate+'_'+rec.agreement+'_'+rec.type+'_'+
+            rec.at.toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp4')
+            .replace(/[#%*<>?/\\|"]/g,'');
+
+  getDrive().then(function(drv){
+    if(rec.session) return rec.session;
+    return graph("/drives/"+drv+"/root:/"+encodeURIComponent(name)+":/createUploadSession",
+      {method:"POST", json:{item:{"@microsoft.graph.conflictBehavior":"rename"}}})
+      .then(function(s){ rec.session=s.uploadUrl; return s.uploadUrl });
+  }).then(function(uploadUrl){
+    return sendChunks(rec,uploadUrl,fg);
+  }).then(function(item){
+    return setFields(item,rec).then(function(){ return item });
+  }).then(function(item){
+    rec.status='saved'; rec.sent=100; rec.itemId=item.id; rec.local=false;
+    updateCount(); renderList();
+    if(fg){ $('uploading').classList.remove('show'); $('done').classList.add('show') }
+  }).catch(function(err){
+    rec.status='failed'; rec.err=err.message;
+    updateCount(); renderList();
+    if(fg) showFailed(rec);
+  });
+}
+
+function sendChunks(rec,uploadUrl,fg){
+  var CH=CFG.chunkMB*1024*1024, size=rec.file.size;
+  var start=rec.byte||0;
+  function next(){
+    if(start>=size) return Promise.reject(new Error("Upload ended unexpectedly"));
+    var end=Math.min(start+CH,size);
+    var slice=rec.file.slice(start,end);
+    return fetch(uploadUrl,{method:"PUT",
+      headers:{"Content-Range":"bytes "+start+"-"+(end-1)+"/"+size},
+      body:slice
+    }).then(function(r){
+      if(r.status===200||r.status===201) return r.json();
+      if(r.status===202){
+        start=end; rec.byte=start;
+        rec.sent=Math.round(start/size*100);
+        if(fg){ $('barFill').style.width=rec.sent+'%'; $('pct').textContent=rec.sent+'%' }
+        else renderList();
+        return next();
+      }
+      throw new Error("Upload chunk failed ("+r.status+")");
+    });
+  }
+  return next();
+}
+
+/* write the four columns onto the uploaded file */
+function setFields(item,rec){
+  return graph("/sites/"+CFG.siteId+"/lists/"+CFG.listId+"/items/"+item.listItem.id+"/fields",
+    {method:"PATCH", json:{
+      PlateNo: rec.plate,
+      AgreementNo: rec.agreement,
+      InspectionType: rec.type,
+      Drivername: rec.driver,
+      InspectionDate: rec.at.toISOString()
+    }}).catch(function(e){
+      /* column internal names can differ — surface it rather than fail silently */
+      throw new Error("Video uploaded but details failed to save. "+e.message);
+    });
+}
+
+/* ---------------- read back ---------------- */
+function loadFromSharePoint(){
+  $('listBody').innerHTML='<div class="empty"><div>◌</div><p style="margin:0">Loading…</p></div>';
+  getDrive().then(function(){
+    return graph("/sites/"+CFG.siteId+"/lists/"+CFG.listId+
+      "/items?expand=fields&$top=200&$orderby=createdDateTime desc");
+  }).then(function(d){
+    var got=(d.value||[]).map(function(it){
+      var f=it.fields||{};
+      return {
+        id:it.id, itemId:it.id,
+        agreement:f.AgreementNo||'—',
+        plate:f.PlateNo||'—',
+        type:f.InspectionType||'—',
+        driver:f.Drivername||'—',
+        at:new Date(f.InspectionDate||it.createdDateTime),
+        size:0, status:'saved', webUrl:it.webUrl
+      };
+    });
+    records=records.filter(function(r){return r.local}).concat(got);
+    updateCount(); renderList();
+  }).catch(function(e){
+    $('listBody').innerHTML='<div class="empty"><div>!</div>'+
+      '<p style="color:var(--ink);margin:0 0 6px">Could not load inspections</p>'+
+      '<p style="margin:0;font-size:13px">'+e.message+'</p></div>';
+  });
+}
+
+/* ---------------- failure screen ---------------- */
+function showFailed(rec){
+  $('uploading').classList.remove('show');
+  $('failed').classList.add('show');
+  $('failedWhat').textContent=rec.plate+' · '+rec.agreement+' · '+rec.type;
+  $('failedAt').textContent='Stopped at '+(rec.sent||0)+'%';
+  $('retryNow').onclick=function(){
+    $('failed').classList.remove('show'); $('uploading').classList.add('show');
+    $('barFill').style.width=(rec.sent||0)+'%'; $('pct').textContent=(rec.sent||0)+'%';
+    upload(rec,true);
+  };
+  $('retryLater').onclick=function(){
+    $('failed').classList.remove('show'); resetToForm(); show('list');
+  };
+  window.scrollTo(0,0);
+}
+
+function updateCount(){
+  var pend=records.filter(function(r){return r.status!=='saved'}).length;
+  $('count').textContent=records.length;
+  $('count').style.background=pend?'rgba(255,107,90,.22)':'';
+  $('count').style.color=pend?'var(--alert)':'';
+}
+
+/* retry pending whenever the tablet comes back online */
+window.addEventListener('online',function(){
+  records.filter(function(r){return r.status==='failed'})
+         .forEach(function(r){ upload(r,false) });
+});
+
+/* ---------------- tabs / reset ---------------- */
+function show(which){
+  var isNew=which==='new';
+  $('tabNew').classList.toggle('on',isNew);
+  $('tabList').classList.toggle('on',!isNew);
+  $('viewNew').classList.toggle('on',isNew && !$('done').classList.contains('show'));
+  $('viewList').classList.toggle('on',!isNew);
+  $('dock').classList.toggle('hide',!isNew || $('done').classList.contains('show'));
+  if(!isNew){ renderList(); loadFromSharePoint() }
+}
+$('tabNew').onclick=function(){ resetToForm(); show('new') };
+$('tabList').onclick=function(){ show('list') };
+$('again').onclick=function(){ resetToForm(); show('new') };
+
+function resetToForm(){
+  $('done').classList.remove('show'); $('uploading').classList.remove('show');
+  $('failed').classList.remove('show');
+  $('barFill').style.width='0'; $('pct').textContent='0%';
+  state={type:null,file:null,url:null,dur:null};
+  $('agreement').value=''; $('plate').value=''; $('driver').value='';
+  $('checkin').setAttribute('aria-pressed',false);
+  $('checkout').setAttribute('aria-pressed',false);
+  $('file').value=''; $('preview').removeAttribute('src');
+  $('empty').style.display=''; $('filled').style.display='none';
+  $('bay').classList.remove('filled');
+  $('bayLabel').innerHTML='Step 5 · <b>Record the walkaround</b>';
+  $('viewNew').classList.add('on'); $('dock').classList.remove('hide');
+  sync();
+}
+
+/* ---------------- list + search ---------------- */
+var filter='All';
+function matches(r){
+  if(filter!=='All' && r.type!==filter) return false;
+  var q=$('q').value.trim().toLowerCase(); if(!q) return true;
+  var hay=(r.plate+' '+r.agreement+' '+r.driver+' '+
+           r.at.toLocaleDateString('en-GB')).toLowerCase();
+  return q.split(/\s+/).every(function(w){return hay.indexOf(w)>-1});
+}
+function byId(id){ return records.filter(function(x){return x.id===id})[0] }
+
+function renderList(){
+  if(!records.length){
+    $('listBody').innerHTML='<div class="empty"><div>▤</div>'+
+      '<p style="font-size:16px;margin:0 0 6px;color:var(--ink)">No inspections yet</p>'+
+      '<p style="font-size:14px;margin:0">Submitted inspections appear here.</p></div>';
+    return;
+  }
+  var hits=records.filter(matches);
+  var pend=records.filter(function(r){return r.status!=='saved'}).length;
+  var head='';
+  if(pend) head+='<div class="pendbar">'+pend+' inspection'+(pend>1?'s':'')+
+    ' not saved yet. Tap Retry — the video is still on this tablet.</div>';
+  if(!hits.length){
+    $('listBody').innerHTML=head+'<div class="empty"><div>▤</div>'+
+      '<p style="font-size:16px;margin:0 0 6px;color:var(--ink)">Nothing matches</p>'+
+      '<p style="font-size:14px;margin:0">Try a different plate or agreement number.</p></div>';
+    return;
+  }
+  head+='<div class="resultcount">'+hits.length+' of '+records.length+'</div>';
+  $('listBody').innerHTML=head+hits.map(function(r){
+    var cls=r.type==='Check-In'?'in':'out', badge='';
+    if(r.status==='uploading') badge='<div class="state up">Uploading '+(r.sent||0)+'%</div>';
+    else if(r.status==='failed') badge='<div class="state bad">Not saved</div>';
+    return '<div class="card'+(r.status!=='saved'?' unsaved':'')+'" data-id="'+r.id+'">'+
+      '<div class="play">'+(r.status==='saved'?'▶':'!')+'</div><div class="meta">'+
+      '<div class="top">'+r.plate+' · '+r.agreement+'</div>'+
+      '<div class="sub">'+r.at.toLocaleDateString('en-GB')+' · '+
+        r.at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+
+        ' · '+r.driver+(r.size?' · '+(r.size/1048576).toFixed(0)+' MB':'')+'</div>'+
+      badge+'</div>'+
+      (r.status==='failed'
+        ? '<button class="retry" data-retry="'+r.id+'">Retry</button>'
+        : '<div class="tag '+cls+'">'+r.type+'</div>')+'</div>';
+  }).join('');
+
+  Array.prototype.forEach.call(document.querySelectorAll('.retry'),function(b){
+    b.onclick=function(ev){ ev.stopPropagation();
+      var r=byId(b.dataset.retry); if(r) upload(r,false) };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.card'),function(c){
+    c.onclick=function(){ var r=byId(c.dataset.id); if(r&&r.status==='saved') open(r) };
+  });
+}
+$('q').oninput=renderList;
+Array.prototype.forEach.call(document.querySelectorAll('.filt'),function(b){
+  b.onclick=function(){ filter=b.dataset.f;
+    Array.prototype.forEach.call(document.querySelectorAll('.filt'),function(x){
+      x.classList.toggle('on',x===b) });
+    renderList(); };
+});
+
+/* ---------------- player ---------------- */
+function open(r){
+  $('mTitle').textContent=r.plate+' · '+r.agreement;
+  $('mWhen').textContent=r.type+' · '+r.at.toLocaleDateString('en-GB')+' '+
+    r.at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+' · '+r.driver;
+  $('mMeta').innerHTML='';
+  if(r.url){ $('mVideo').src=r.url; $('modal').classList.add('show'); return }
+  $('mVideo').removeAttribute('src');
+  $('modal').classList.add('show');
+  $('mMeta').innerHTML='<div class="chip">Loading video…</div>';
+  getDrive().then(function(drv){
+    return graph("/drives/"+drv+"/items/"+r.driveItemId);
+  }).catch(function(){
+    return graph("/sites/"+CFG.siteId+"/lists/"+CFG.listId+"/items/"+r.itemId+"/driveItem");
+  }).then(function(di){
+    $('mVideo').src=di["@microsoft.graph.downloadUrl"];
+    $('mMeta').innerHTML='<div class="chip">SIZE <b>'+
+      ((di.size||0)/1048576).toFixed(1)+' MB</b></div>';
+  }).catch(function(e){
+    $('mMeta').innerHTML='<div class="chip warn">Could not load video</div>';
+  });
+}
+$('mClose').onclick=function(){ $('mVideo').pause(); $('modal').classList.remove('show') };
+})();
+</script>
+</body>
+</html>
