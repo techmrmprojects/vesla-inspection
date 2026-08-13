@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vesla Vehicle Inspection</title>
-<link rel="icon" href="logo.png?v=8">
+<link rel="icon" href="logo.png?v=9">
 <link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -211,7 +211,7 @@ if(typeof msal==='undefined'){
 
 <div id="app" style="display:none">
 <header>
-  <img class="shield" src="logo.png?v=8" alt="Vesla">
+  <img class="shield" src="logo.png?v=9" alt="Vesla">
   <div class="brand">VESLA<span>Vehicle Inspection · VRC</span></div>
   <div class="who">SIGNED IN<br><b id="whoAmI">…</b><br><a href="#" id="signout" style="color:var(--ink-dim);font-size:10px">Sign out</a></div>
 </header>
@@ -343,9 +343,9 @@ if(typeof msal==='undefined'){
 <div id="gate" style="display:flex;position:fixed;inset:0;background:var(--base);
   z-index:100;align-items:center;justify-content:center;padding:24px">
   <div style="text-align:center;max-width:360px">
-    <img src="logo.png?v=8" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
+    <img src="logo.png?v=9" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
     <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
-    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 8</span></p>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 9</span></p>
     <button id="signinBtn" class="again" style="width:100%">Sign in</button>
     <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
   </div>
@@ -567,8 +567,18 @@ $('submit').onclick=function(){
 };
 
 /* chunked resumable upload */
+var wakeLock=null;
+function keepAwake(on){
+  try{
+    if(on && 'wakeLock' in navigator && !wakeLock){
+      navigator.wakeLock.request('screen').then(function(w){ wakeLock=w;
+        w.addEventListener('release',function(){ wakeLock=null }) }).catch(function(){});
+    } else if(!on && wakeLock){ wakeLock.release(); wakeLock=null }
+  }catch(e){}
+}
+
 function upload(rec,fg){
-  uploading = true;
+  uploading = true; keepAwake(true);
   rec.status='uploading'; updateCount(); renderList();
   var name=(rec.plate+'_'+rec.agreement+'_'+rec.type+'_'+
             rec.at.toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp4')
@@ -585,13 +595,13 @@ function upload(rec,fg){
   }).then(function(item){
     return setFields(item,rec).then(function(){ return item });
   }).then(function(item){
-    uploading = false;
+    uploading = false; keepAwake(false);
     rec.status='saved'; rec.sent=100; rec.itemId=item.id; rec.local=false;
     updateCount(); renderList();
     if(fg){ $('uploading').classList.remove('show'); $('done').classList.add('show') }
   }).catch(function(err){
     console.error('UPLOAD FAILED:',err);
-    uploading = false;
+    uploading = false; keepAwake(false);
     rec.status='failed'; rec.err=err.message;
     updateCount(); renderList();
     if(fg) showFailed(rec);
@@ -605,7 +615,7 @@ function sendChunks(rec,uploadUrl,fg){
   /* Graph requires chunks in order and each must be a multiple of 320 KiB.
      Use a large chunk so there are few round trips, and upload with XHR so we
      get true byte-level progress instead of a jump per chunk. */
-  var CH = 32*1024*1024;                       // 32 MB
+  var CH = 5*1024*1024;                        // 5 MB — survives flaky links
   var start0 = rec.byte||0, tries=0;
 
   function wait(ms){ return new Promise(function(r){ setTimeout(r,ms) }) }
@@ -652,8 +662,8 @@ function sendChunks(rec,uploadUrl,fg){
       return next();
     }).catch(function(err){
       tries++;
-      if(tries>6) throw err;
-      if(fg) $('pct').textContent='Connection dropped — retrying ('+tries+' of 6)…';
+      if(tries>10) throw err;
+      if(fg) $('pct').textContent='Connection dropped — retrying ('+tries+' of 10)…';
       return wait(1500*tries).then(next);
     });
   }
