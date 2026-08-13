@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vesla Vehicle Inspection</title>
+<link rel="icon" href="logo.png?v=4">
+<link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -21,9 +23,7 @@
   header{display:flex;align-items:center;gap:14px;padding:14px 20px;
     border-bottom:1px solid var(--line);
     background:linear-gradient(180deg,#101216,#0B0C0E);position:sticky;top:0;z-index:20}
-  .shield{width:34px;height:38px;flex:none;background:var(--gold);
-    clip-path:polygon(50% 0,100% 16%,100% 62%,50% 100%,0 62%,0 16%);
-    display:grid;place-items:center;font-weight:800;color:#0B0C0E;font-size:19px}
+  .shield{width:42px;height:46px;flex:none;object-fit:contain;display:block}
   .brand{font-weight:800;letter-spacing:.16em;font-size:15px}
   .brand span{display:block;font-weight:400;letter-spacing:.06em;font-size:11px;
     color:var(--ink-dim);margin-top:2px}
@@ -188,6 +188,14 @@
     padding:11px 18px;border-radius:9px;font-family:'Archivo',sans-serif;
     font-size:13px;font-weight:800;letter-spacing:.05em;cursor:pointer}
 
+  .orline{display:flex;align-items:center;gap:12px;margin:22px auto 16px;max-width:340px;
+    color:#4A505A;font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+  .orline::before,.orline::after{content:"";flex:1;height:1px;background:var(--line)}
+  .pickbtn{background:none;border:1px solid var(--gold);color:var(--gold);
+    padding:14px 24px;border-radius:var(--r);font-family:'Archivo',sans-serif;
+    font-size:15px;font-weight:700;cursor:pointer}
+  .pickbtn:active{background:rgba(242,194,48,.12)}
+
   .note{margin-top:26px;font-size:12px;color:#4A505A;text-align:center;line-height:1.6}
   input[type=file]{display:none}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -203,9 +211,9 @@ if(typeof msal==='undefined'){
 
 <div id="app" style="display:none">
 <header>
-  <div class="shield">V</div>
+  <img class="shield" src="logo.png?v=4" alt="Vesla">
   <div class="brand">VESLA<span>Vehicle Inspection · VRC</span></div>
-  <div class="who">SIGNED IN<br><b>inspection.vrc</b></div>
+  <div class="who">SIGNED IN<br><b id="whoAmI">…</b><br><a href="#" id="signout" style="color:var(--ink-dim);font-size:10px">Sign out</a></div>
 </header>
 
 <nav>
@@ -245,6 +253,9 @@ if(typeof msal==='undefined'){
       <div class="trigger" id="trigger"><div class="dot"></div></div>
       <div class="trigger-label">Record video</div>
       <div class="hint">Opens the camera. Walk once around the vehicle.<br>Up to 7 minutes.</div>
+      <div class="orline"><span>or</span></div>
+      <button class="pickbtn" id="pick">Choose a video already recorded</button>
+      <div class="hint" style="margin-top:8px">For long videos, record with the Camera app first,<br>then choose it here.</div>
     </div>
     <div id="filled" style="display:none">
       <video id="preview" controls playsinline></video>
@@ -254,6 +265,7 @@ if(typeof msal==='undefined'){
   </div>
 
   <input type="file" id="file" accept="video/*" capture="environment">
+  <input type="file" id="fileLib" accept="video/*">
   <p class="note">Once you submit, the video cannot be changed or deleted.<br>Check it plays before you send it.</p>
 </main>
 
@@ -331,9 +343,9 @@ if(typeof msal==='undefined'){
 <div id="gate" style="display:flex;position:fixed;inset:0;background:var(--base);
   z-index:100;align-items:center;justify-content:center;padding:24px">
   <div style="text-align:center;max-width:360px">
-    <div class="shield" style="width:64px;height:72px;font-size:34px;margin:0 auto 22px"></div>
+    <img src="logo.png?v=4" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
     <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
-    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC</p>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 4</span></p>
     <button id="signinBtn" class="again" style="width:100%">Sign in</button>
     <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
   </div>
@@ -428,8 +440,10 @@ function getDrive(){
   if(driveId) return Promise.resolve(driveId);
   return graph("/sites/"+CFG.siteId+"/drives").then(function(d){
     var hit=(d.value||[]).filter(function(x){return x.name===CFG.library})[0];
-    if(!hit) throw new Error("Library not found: "+CFG.library);
+    if(!hit) throw new Error("STEP 1 (list libraries): library not found: "+CFG.library);
     driveId=hit.id; return driveId;
+  }).catch(function(e){
+    throw new Error("STEP 1 (list libraries) — "+e.message);
   });
 }
 
@@ -455,13 +469,22 @@ $('signinBtn').onclick=function(){
     });
 };
 
+function wireSignOut(){
+  var b=$('signout'); if(!b) return;
+  b.onclick=function(ev){ ev.preventDefault();
+    try{ msalApp.logoutPopup({account:account}) }
+    catch(e){ localStorage.clear(); location.reload() } };
+}
 function ready(){
   $('gate').style.display='none';
   $('app').style.display='block';
+  var who=$('whoAmI');
+  if(who && account) who.textContent = account.username || account.name || '?';
   DRIVERS.forEach(function(n){
     var o=document.createElement('option'); o.value=n; o.textContent=n;
     $('driver').appendChild(o);
   });
+  wireSignOut();
   loadFromSharePoint();
   sync();
 }
@@ -479,9 +502,12 @@ function pick(t){
 $('checkin').onclick=function(){pick('Check-In')};
 $('checkout').onclick=function(){pick('Check-Out')};
 $('trigger').onclick=function(){$('file').click()};
-$('redo').onclick=function(){$('file').click()};
+$('redo').onclick=function(){ $('empty').style.display=''; $('filled').style.display='none'; };
 
-$('file').onchange=function(e){
+$('pick').onclick=function(){$('fileLib').click()};
+$('fileLib').onchange=function(e){ handleFile(e) };
+$('file').onchange=function(e){ handleFile(e) };
+function handleFile(e){
   var f=e.target.files&&e.target.files[0]; if(!f) return;
   state.file=f; state.url=URL.createObjectURL(f);
   $('preview').src=state.url;
@@ -496,7 +522,7 @@ $('file').onchange=function(e){
         '<div class="chip'+(d>450?' warn':' ok')+'">LENGTH <b>'+fmt(d)+'</b></div>'); }
   };
   sync();
-};
+}
 function fmt(d){var m=Math.floor(d/60),s=Math.round(d%60);return m+':'+(s<10?'0':'')+s}
 
 function sync(){
@@ -538,7 +564,8 @@ function upload(rec,fg){
     if(rec.session) return rec.session;
     return graph("/drives/"+drv+"/root:/"+encodeURIComponent(name)+":/createUploadSession",
       {method:"POST", json:{item:{"@microsoft.graph.conflictBehavior":"rename"}}})
-      .then(function(s){ rec.session=s.uploadUrl; return s.uploadUrl });
+      .then(function(s){ rec.session=s.uploadUrl; return s.uploadUrl })
+      .catch(function(e){ throw new Error("STEP 2 (start upload) — "+e.message) });
   }).then(function(uploadUrl){
     return sendChunks(rec,uploadUrl,fg);
   }).then(function(item){
@@ -682,7 +709,7 @@ function resetToForm(){
   $('agreement').value=''; $('plate').value=''; $('driver').value='';
   $('checkin').setAttribute('aria-pressed',false);
   $('checkout').setAttribute('aria-pressed',false);
-  $('file').value=''; $('preview').removeAttribute('src');
+  $('file').value=''; $('fileLib').value=''; $('preview').removeAttribute('src');
   $('empty').style.display=''; $('filled').style.display='none';
   $('bay').classList.remove('filled');
   $('bayLabel').innerHTML='Step 5 · <b>Record the walkaround</b>';
