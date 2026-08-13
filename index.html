@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vesla Vehicle Inspection</title>
-<link rel="icon" href="logo.png?v=11">
+<link rel="icon" href="logo.png?v=12">
 <link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -211,7 +211,7 @@ if(typeof msal==='undefined'){
 
 <div id="app" style="display:none">
 <header>
-  <img class="shield" src="logo.png?v=11" alt="Vesla">
+  <img class="shield" src="logo.png?v=12" alt="Vesla">
   <div class="brand">VESLA<span>Vehicle Inspection · VRC</span></div>
   <div class="who">SIGNED IN<br><b id="whoAmI">…</b><br><a href="#" id="signout" style="color:var(--ink-dim);font-size:10px">Sign out</a></div>
 </header>
@@ -343,9 +343,9 @@ if(typeof msal==='undefined'){
 <div id="gate" style="display:flex;position:fixed;inset:0;background:var(--base);
   z-index:100;align-items:center;justify-content:center;padding:24px">
   <div style="text-align:center;max-width:360px">
-    <img src="logo.png?v=11" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
+    <img src="logo.png?v=12" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
     <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
-    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 11</span></p>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 12</span></p>
     <button id="signinBtn" class="again" style="width:100%">Sign in</button>
     <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
   </div>
@@ -619,79 +619,81 @@ function sendChunks(rec,uploadUrl,fg){
   var size=rec.file.size;
   if(!rec.t0) rec.t0=Date.now();
 
-  var CH   = 5*1024*1024;   // 5 MB per request
-  var PAR  = 3;             // 3 in flight — beats per-connection throttling
-  var next0 = rec.byte||0;  // next byte range to hand out
-  var acked = rec.byte||0;  // bytes confirmed by the server
-  var live  = {};           // in-flight progress per range
-  var finalItem=null, stopped=false;
+  /* Graph requires strictly sequential chunks — parallel uploads return
+     409/416. 10 MB is large enough to keep the pipe busy between requests. */
+  var CH = 10*1024*1024;
+  var pos = rec.byte||0;
 
-  function paint(){
-    if(!fg) return;
-    var inflight=0; for(var k in live) inflight+=live[k];
-    var done=Math.min(acked+inflight,size);
-    rec.sent=Math.round(done/size*100);
-    $('barFill').style.width=rec.sent+'%';
-    var secs=(Date.now()-rec.t0)/1000;
-    var mbps=(done/1048576*8)/Math.max(secs,0.1);
-    var left=(size-done)/Math.max(done/secs,1);
-    $('pct').textContent=rec.sent+'%  ·  '+mbps.toFixed(0)+' Mbps  ·  '+
-      (left>90 ? Math.round(left/60)+' min left' : Math.round(left)+' sec left');
+  function wait(ms){ return new Promise(function(r){ setTimeout(r,ms) }) }
+
+  /* Ask the server where it actually got to. Used after any error so we
+     never re-send a range it already has (that is what caused 409/416). */
+  function resync(){
+    return new Promise(function(resolve){
+      var x=new XMLHttpRequest();
+      x.open('GET',uploadUrl,true);
+      x.onload=function(){
+        try{
+          var j=JSON.parse(x.responseText);
+          var r=(j.nextExpectedRanges||[])[0];
+          if(r) pos=parseInt(String(r).split('-')[0],10)||pos;
+        }catch(e){}
+        resolve();
+      };
+      x.onerror=function(){ resolve() };
+      x.send();
+    });
   }
 
-  function put(from,to,attempt){
+  function put(from,to){
     return new Promise(function(resolve,reject){
       var xhr=new XMLHttpRequest();
       xhr.open('PUT',uploadUrl,true);
       xhr.setRequestHeader('Content-Range','bytes '+from+'-'+(to-1)+'/'+size);
       xhr.timeout=10*60*1000;
       xhr.upload.onprogress=function(e){
-        if(e.lengthComputable){ live[from]=e.loaded; paint() }
+        if(!fg||!e.lengthComputable) return;
+        var done=from+e.loaded;
+        rec.sent=Math.round(done/size*100);
+        $('barFill').style.width=rec.sent+'%';
+        var secs=(Date.now()-rec.t0)/1000;
+        var mbps=(done/1048576*8)/Math.max(secs,0.1);
+        var left=(size-done)/Math.max(done/secs,1);
+        $('pct').textContent=rec.sent+'%  ·  '+mbps.toFixed(0)+' Mbps  ·  '+
+          (left>90?Math.round(left/60)+' min left':Math.round(left)+' sec left');
       };
       xhr.onload=function(){
-        delete live[from];
         if(xhr.status===200||xhr.status===201){
-          try{ finalItem=JSON.parse(xhr.responseText) }catch(e){}
-          acked=size; paint(); resolve();
+          var it=null; try{ it=JSON.parse(xhr.responseText) }catch(e){}
+          resolve({done:true,item:it});
         } else if(xhr.status===202){
-          acked+= (to-from); rec.byte=Math.max(rec.byte||0,acked); paint(); resolve();
-        } else if((xhr.status>=500||xhr.status===429) && attempt<8){
-          setTimeout(function(){ put(from,to,attempt+1).then(resolve,reject) },1200*attempt);
-        } else reject(new Error('Upload failed ('+xhr.status+')'));
+          resolve({done:false,to:to});
+        } else reject({status:xhr.status});
       };
-      xhr.onerror=function(){
-        delete live[from];
-        if(attempt<8){
-          if(fg) $('pct').textContent='Connection dropped — retrying ('+attempt+' of 8)…';
-          setTimeout(function(){ put(from,to,attempt+1).then(resolve,reject) },1200*attempt);
-        } else reject(new Error('Connection lost'));
-      };
-      xhr.ontimeout=xhr.onerror;
+      xhr.onerror  =function(){ reject({status:0}) };
+      xhr.ontimeout=function(){ reject({status:0}) };
       xhr.send(rec.file.slice(from,to));
     });
   }
 
-  function pump(){
-    var jobs=[];
-    while(jobs.length<PAR && next0<size && !stopped){
-      var from=next0, to=Math.min(from+CH,size);
-      next0=to;
-      jobs.push(put(from,to,1));
-    }
-    if(!jobs.length) return Promise.resolve(finalItem);
-    return Promise.all(jobs).then(function(){
-      if(next0>=size) return finalItem;
-      return pump();
+  var tries=0;
+  function step(){
+    if(pos>=size) return Promise.reject(new Error('Upload ended unexpectedly'));
+    var to=Math.min(pos+CH,size);
+    return put(pos,to).then(function(res){
+      tries=0;
+      if(res.done) return res.item;
+      pos=res.to; rec.byte=pos;
+      return step();
+    }).catch(function(err){
+      tries++;
+      if(tries>10) throw new Error('Upload failed ('+(err.status||'connection')+')');
+      if(fg) $('pct').textContent='Reconnecting ('+tries+' of 10)…';
+      /* 409/416 mean our position is stale — ask the server, then continue */
+      return wait(1200*Math.min(tries,5)).then(resync).then(step);
     });
   }
-
-  return pump().then(function(item){
-    if(item) return item;
-    /* last chunk may have completed out of order — fetch the finished item */
-    return getDrive().then(function(drv){
-      return graph('/drives/'+drv+'/root:/'+encodeURIComponent(rec.fname)+':/');
-    });
-  });
+  return step();
 }
 
 /* write the four columns onto the uploaded file.
