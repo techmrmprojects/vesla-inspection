@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vesla Vehicle Inspection</title>
-<link rel="icon" href="logo.png?v=5">
+<link rel="icon" href="logo.png?v=8">
 <link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -211,7 +211,7 @@ if(typeof msal==='undefined'){
 
 <div id="app" style="display:none">
 <header>
-  <img class="shield" src="logo.png?v=5" alt="Vesla">
+  <img class="shield" src="logo.png?v=8" alt="Vesla">
   <div class="brand">VESLA<span>Vehicle Inspection · VRC</span></div>
   <div class="who">SIGNED IN<br><b id="whoAmI">…</b><br><a href="#" id="signout" style="color:var(--ink-dim);font-size:10px">Sign out</a></div>
 </header>
@@ -343,9 +343,9 @@ if(typeof msal==='undefined'){
 <div id="gate" style="display:flex;position:fixed;inset:0;background:var(--base);
   z-index:100;align-items:center;justify-content:center;padding:24px">
   <div style="text-align:center;max-width:360px">
-    <img src="logo.png?v=5" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
+    <img src="logo.png?v=8" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
     <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
-    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 5</span></p>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 8</span></p>
     <button id="signinBtn" class="again" style="width:100%">Sign in</button>
     <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
   </div>
@@ -382,7 +382,7 @@ var CFG = {
   siteId   : "veslamotors.sharepoint.com,2cb8b9c8-805e-4332-b9e1-2876cf72b674,9efcecdb-6eef-40e6-bfb1-fb85bc3e4f0c",
   listId   : "a8435e64-35de-4b0c-8560-e8504c8e67cd",
   library  : "Vehicle Inspection Videos",
-  chunkMB  : 8
+  chunkMB  : 20
 };
 /* ========================================================== */
 
@@ -599,25 +599,62 @@ function upload(rec,fg){
 }
 
 function sendChunks(rec,uploadUrl,fg){
-  var CH=CFG.chunkMB*1024*1024, size=rec.file.size;
-  var start=rec.byte||0;
+  var size=rec.file.size;
+  if(!rec.t0) rec.t0=Date.now();
+
+  /* Graph requires chunks in order and each must be a multiple of 320 KiB.
+     Use a large chunk so there are few round trips, and upload with XHR so we
+     get true byte-level progress instead of a jump per chunk. */
+  var CH = 32*1024*1024;                       // 32 MB
+  var start0 = rec.byte||0, tries=0;
+
+  function wait(ms){ return new Promise(function(r){ setTimeout(r,ms) }) }
+
+  function put(from,to){
+    return new Promise(function(resolve,reject){
+      var xhr=new XMLHttpRequest();
+      xhr.open('PUT',uploadUrl,true);
+      xhr.setRequestHeader('Content-Range','bytes '+from+'-'+(to-1)+'/'+size);
+      xhr.timeout = 15*60*1000;
+
+      xhr.upload.onprogress=function(e){
+        if(!fg || !e.lengthComputable) return;
+        var done = from + e.loaded;
+        rec.sent = Math.round(done/size*100);
+        $('barFill').style.width=rec.sent+'%';
+        var secs=(Date.now()-rec.t0)/1000;
+        var mbps=(done/1048576*8)/Math.max(secs,0.1);
+        var left=(size-done)/Math.max(done/secs,1);
+        $('pct').textContent=rec.sent+'%  ·  '+mbps.toFixed(0)+' Mbps  ·  '+
+          (left>90 ? Math.round(left/60)+' min left' : Math.round(left)+' sec left');
+      };
+      xhr.onload=function(){
+        if(xhr.status===200||xhr.status===201){
+          try{ resolve({done:true, item:JSON.parse(xhr.responseText)}) }
+          catch(e){ resolve({done:true, item:null}) }
+        } else if(xhr.status===202){ resolve({done:false}) }
+        else if(xhr.status>=500||xhr.status===429){ reject(new Error('busy '+xhr.status)) }
+        else { reject(new Error('Upload failed ('+xhr.status+')')) }
+      };
+      xhr.onerror  =function(){ reject(new Error('Connection lost')) };
+      xhr.ontimeout=function(){ reject(new Error('Connection timed out')) };
+      xhr.send(rec.file.slice(from,to));
+    });
+  }
+
   function next(){
-    if(start>=size) return Promise.reject(new Error("Upload ended unexpectedly"));
-    var end=Math.min(start+CH,size);
-    var slice=rec.file.slice(start,end);
-    return fetch(uploadUrl,{method:"PUT",
-      headers:{"Content-Range":"bytes "+start+"-"+(end-1)+"/"+size},
-      body:slice
-    }).then(function(r){
-      if(r.status===200||r.status===201) return r.json();
-      if(r.status===202){
-        start=end; rec.byte=start;
-        rec.sent=Math.round(start/size*100);
-        if(fg){ $('barFill').style.width=rec.sent+'%'; $('pct').textContent=rec.sent+'%' }
-        else renderList();
-        return next();
-      }
-      throw new Error("Upload chunk failed ("+r.status+")");
+    if(start0>=size) return Promise.reject(new Error('Upload ended unexpectedly'));
+    var to=Math.min(start0+CH,size);
+    return put(start0,to).then(function(res){
+      tries=0;
+      if(res.done) return res.item;
+      start0=to; rec.byte=start0;
+      return next();
+    }).catch(function(err){
+      tries++;
+      if(tries>6) throw err;
+      if(fg) $('pct').textContent='Connection dropped — retrying ('+tries+' of 6)…';
+      return wait(1500*tries).then(next);
     });
   }
   return next();
