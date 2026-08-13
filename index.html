@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vesla Vehicle Inspection</title>
-<link rel="icon" href="logo.png?v=4">
+<link rel="icon" href="logo.png?v=5">
 <link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -211,7 +211,7 @@ if(typeof msal==='undefined'){
 
 <div id="app" style="display:none">
 <header>
-  <img class="shield" src="logo.png?v=4" alt="Vesla">
+  <img class="shield" src="logo.png?v=5" alt="Vesla">
   <div class="brand">VESLA<span>Vehicle Inspection · VRC</span></div>
   <div class="who">SIGNED IN<br><b id="whoAmI">…</b><br><a href="#" id="signout" style="color:var(--ink-dim);font-size:10px">Sign out</a></div>
 </header>
@@ -343,9 +343,9 @@ if(typeof msal==='undefined'){
 <div id="gate" style="display:flex;position:fixed;inset:0;background:var(--base);
   z-index:100;align-items:center;justify-content:center;padding:24px">
   <div style="text-align:center;max-width:360px">
-    <img src="logo.png?v=4" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
+    <img src="logo.png?v=5" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
     <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
-    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 4</span></p>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 5</span></p>
     <button id="signinBtn" class="again" style="width:100%">Sign in</button>
     <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
   </div>
@@ -415,12 +415,25 @@ function signIn(){
     account=res.account; msalApp.setActiveAccount(account); return account;
   });
 }
+/* Only ever one token request at a time. Two concurrent popups make MSAL
+   throw interaction_in_progress and everything stalls. */
+var tokenChain = Promise.resolve();
+var interactive = false;
+
 function token(){
-  return msalApp.acquireTokenSilent({scopes:SCOPES,account:account})
-    .then(function(r){return r.accessToken})
-    .catch(function(){
-      return msalApp.acquireTokenPopup({scopes:SCOPES}).then(function(r){return r.accessToken});
-    });
+  var run = function(){
+    return msalApp.acquireTokenSilent({scopes:SCOPES,account:account})
+      .then(function(r){ return r.accessToken })
+      .catch(function(silentErr){
+        if(interactive) throw new Error('Sign-in already in progress. Wait a moment and retry.');
+        interactive = true;
+        return msalApp.acquireTokenPopup({scopes:SCOPES,account:account})
+          .then(function(r){ interactive=false; return r.accessToken })
+          .catch(function(e){ interactive=false; throw e });
+      });
+  };
+  tokenChain = tokenChain.then(run, run);
+  return tokenChain;
 }
 function graph(url,opts){
   return token().then(function(t){
@@ -555,6 +568,7 @@ $('submit').onclick=function(){
 
 /* chunked resumable upload */
 function upload(rec,fg){
+  uploading = true;
   rec.status='uploading'; updateCount(); renderList();
   var name=(rec.plate+'_'+rec.agreement+'_'+rec.type+'_'+
             rec.at.toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp4')
@@ -571,11 +585,13 @@ function upload(rec,fg){
   }).then(function(item){
     return setFields(item,rec).then(function(){ return item });
   }).then(function(item){
+    uploading = false;
     rec.status='saved'; rec.sent=100; rec.itemId=item.id; rec.local=false;
     updateCount(); renderList();
     if(fg){ $('uploading').classList.remove('show'); $('done').classList.add('show') }
   }).catch(function(err){
     console.error('UPLOAD FAILED:',err);
+    uploading = false;
     rec.status='failed'; rec.err=err.message;
     updateCount(); renderList();
     if(fg) showFailed(rec);
@@ -688,6 +704,7 @@ window.addEventListener('online',function(){
 });
 
 /* ---------------- tabs / reset ---------------- */
+var uploading = false;
 function show(which){
   var isNew=which==='new';
   $('tabNew').classList.toggle('on',isNew);
@@ -695,7 +712,7 @@ function show(which){
   $('viewNew').classList.toggle('on',isNew && !$('done').classList.contains('show'));
   $('viewList').classList.toggle('on',!isNew);
   $('dock').classList.toggle('hide',!isNew || $('done').classList.contains('show'));
-  if(!isNew){ renderList(); loadFromSharePoint() }
+  if(!isNew){ renderList(); if(!uploading) loadFromSharePoint() }
 }
 $('tabNew').onclick=function(){ resetToForm(); show('new') };
 $('tabList').onclick=function(){ show('list') };
