@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vesla Vehicle Inspection</title>
-<link rel="icon" href="logo.png?v=9">
+<link rel="icon" href="logo.png?v=11">
 <link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -211,7 +211,7 @@ if(typeof msal==='undefined'){
 
 <div id="app" style="display:none">
 <header>
-  <img class="shield" src="logo.png?v=9" alt="Vesla">
+  <img class="shield" src="logo.png?v=11" alt="Vesla">
   <div class="brand">VESLA<span>Vehicle Inspection · VRC</span></div>
   <div class="who">SIGNED IN<br><b id="whoAmI">…</b><br><a href="#" id="signout" style="color:var(--ink-dim);font-size:10px">Sign out</a></div>
 </header>
@@ -343,9 +343,9 @@ if(typeof msal==='undefined'){
 <div id="gate" style="display:flex;position:fixed;inset:0;background:var(--base);
   z-index:100;align-items:center;justify-content:center;padding:24px">
   <div style="text-align:center;max-width:360px">
-    <img src="logo.png?v=9" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
+    <img src="logo.png?v=11" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
     <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
-    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 9</span></p>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 11</span></p>
     <button id="signinBtn" class="again" style="width:100%">Sign in</button>
     <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
   </div>
@@ -503,6 +503,21 @@ function ready(){
 }
 
 /* ---------------- form state ---------------- */
+var uploading = false;
+var wakeLock=null;
+function keepAwake(on){
+  try{
+    if(on && 'wakeLock' in navigator && !wakeLock){
+      navigator.wakeLock.request('screen').then(function(w){ wakeLock=w;
+        w.addEventListener('release',function(){ wakeLock=null }) }).catch(function(){});
+    } else if(!on && wakeLock){ wakeLock.release(); wakeLock=null }
+  }catch(e){}
+}
+/* re-acquire if Android drops it when the tab is backgrounded */
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible' && uploading) keepAwake(true);
+});
+
 var state={type:null,file:null,url:null,dur:null};
 var records=[];      // saved (from SharePoint) + local pending
 
@@ -551,6 +566,7 @@ $('driver').onchange=sync;
 /* ---------------- submit ---------------- */
 $('submit').onclick=function(){
   if($('submit').disabled) return;
+  keepAwake(true);          /* must be inside the tap to be granted */
   var now=new Date();
   var rec={
     id:'local-'+Date.now(),
@@ -567,16 +583,6 @@ $('submit').onclick=function(){
 };
 
 /* chunked resumable upload */
-var wakeLock=null;
-function keepAwake(on){
-  try{
-    if(on && 'wakeLock' in navigator && !wakeLock){
-      navigator.wakeLock.request('screen').then(function(w){ wakeLock=w;
-        w.addEventListener('release',function(){ wakeLock=null }) }).catch(function(){});
-    } else if(!on && wakeLock){ wakeLock.release(); wakeLock=null }
-  }catch(e){}
-}
-
 function upload(rec,fg){
   uploading = true; keepAwake(true);
   rec.status='uploading'; updateCount(); renderList();
@@ -584,6 +590,7 @@ function upload(rec,fg){
             rec.at.toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp4')
             .replace(/[#%*<>?/\\|"]/g,'');
 
+  rec.fname=name;
   getDrive().then(function(drv){
     if(rec.session) return rec.session;
     return graph("/drives/"+drv+"/root:/"+encodeURIComponent(name)+":/createUploadSession",
@@ -612,62 +619,79 @@ function sendChunks(rec,uploadUrl,fg){
   var size=rec.file.size;
   if(!rec.t0) rec.t0=Date.now();
 
-  /* Graph requires chunks in order and each must be a multiple of 320 KiB.
-     Use a large chunk so there are few round trips, and upload with XHR so we
-     get true byte-level progress instead of a jump per chunk. */
-  var CH = 5*1024*1024;                        // 5 MB — survives flaky links
-  var start0 = rec.byte||0, tries=0;
+  var CH   = 5*1024*1024;   // 5 MB per request
+  var PAR  = 3;             // 3 in flight — beats per-connection throttling
+  var next0 = rec.byte||0;  // next byte range to hand out
+  var acked = rec.byte||0;  // bytes confirmed by the server
+  var live  = {};           // in-flight progress per range
+  var finalItem=null, stopped=false;
 
-  function wait(ms){ return new Promise(function(r){ setTimeout(r,ms) }) }
+  function paint(){
+    if(!fg) return;
+    var inflight=0; for(var k in live) inflight+=live[k];
+    var done=Math.min(acked+inflight,size);
+    rec.sent=Math.round(done/size*100);
+    $('barFill').style.width=rec.sent+'%';
+    var secs=(Date.now()-rec.t0)/1000;
+    var mbps=(done/1048576*8)/Math.max(secs,0.1);
+    var left=(size-done)/Math.max(done/secs,1);
+    $('pct').textContent=rec.sent+'%  ·  '+mbps.toFixed(0)+' Mbps  ·  '+
+      (left>90 ? Math.round(left/60)+' min left' : Math.round(left)+' sec left');
+  }
 
-  function put(from,to){
+  function put(from,to,attempt){
     return new Promise(function(resolve,reject){
       var xhr=new XMLHttpRequest();
       xhr.open('PUT',uploadUrl,true);
       xhr.setRequestHeader('Content-Range','bytes '+from+'-'+(to-1)+'/'+size);
-      xhr.timeout = 15*60*1000;
-
+      xhr.timeout=10*60*1000;
       xhr.upload.onprogress=function(e){
-        if(!fg || !e.lengthComputable) return;
-        var done = from + e.loaded;
-        rec.sent = Math.round(done/size*100);
-        $('barFill').style.width=rec.sent+'%';
-        var secs=(Date.now()-rec.t0)/1000;
-        var mbps=(done/1048576*8)/Math.max(secs,0.1);
-        var left=(size-done)/Math.max(done/secs,1);
-        $('pct').textContent=rec.sent+'%  ·  '+mbps.toFixed(0)+' Mbps  ·  '+
-          (left>90 ? Math.round(left/60)+' min left' : Math.round(left)+' sec left');
+        if(e.lengthComputable){ live[from]=e.loaded; paint() }
       };
       xhr.onload=function(){
+        delete live[from];
         if(xhr.status===200||xhr.status===201){
-          try{ resolve({done:true, item:JSON.parse(xhr.responseText)}) }
-          catch(e){ resolve({done:true, item:null}) }
-        } else if(xhr.status===202){ resolve({done:false}) }
-        else if(xhr.status>=500||xhr.status===429){ reject(new Error('busy '+xhr.status)) }
-        else { reject(new Error('Upload failed ('+xhr.status+')')) }
+          try{ finalItem=JSON.parse(xhr.responseText) }catch(e){}
+          acked=size; paint(); resolve();
+        } else if(xhr.status===202){
+          acked+= (to-from); rec.byte=Math.max(rec.byte||0,acked); paint(); resolve();
+        } else if((xhr.status>=500||xhr.status===429) && attempt<8){
+          setTimeout(function(){ put(from,to,attempt+1).then(resolve,reject) },1200*attempt);
+        } else reject(new Error('Upload failed ('+xhr.status+')'));
       };
-      xhr.onerror  =function(){ reject(new Error('Connection lost')) };
-      xhr.ontimeout=function(){ reject(new Error('Connection timed out')) };
+      xhr.onerror=function(){
+        delete live[from];
+        if(attempt<8){
+          if(fg) $('pct').textContent='Connection dropped — retrying ('+attempt+' of 8)…';
+          setTimeout(function(){ put(from,to,attempt+1).then(resolve,reject) },1200*attempt);
+        } else reject(new Error('Connection lost'));
+      };
+      xhr.ontimeout=xhr.onerror;
       xhr.send(rec.file.slice(from,to));
     });
   }
 
-  function next(){
-    if(start0>=size) return Promise.reject(new Error('Upload ended unexpectedly'));
-    var to=Math.min(start0+CH,size);
-    return put(start0,to).then(function(res){
-      tries=0;
-      if(res.done) return res.item;
-      start0=to; rec.byte=start0;
-      return next();
-    }).catch(function(err){
-      tries++;
-      if(tries>10) throw err;
-      if(fg) $('pct').textContent='Connection dropped — retrying ('+tries+' of 10)…';
-      return wait(1500*tries).then(next);
+  function pump(){
+    var jobs=[];
+    while(jobs.length<PAR && next0<size && !stopped){
+      var from=next0, to=Math.min(from+CH,size);
+      next0=to;
+      jobs.push(put(from,to,1));
+    }
+    if(!jobs.length) return Promise.resolve(finalItem);
+    return Promise.all(jobs).then(function(){
+      if(next0>=size) return finalItem;
+      return pump();
     });
   }
-  return next();
+
+  return pump().then(function(item){
+    if(item) return item;
+    /* last chunk may have completed out of order — fetch the finished item */
+    return getDrive().then(function(drv){
+      return graph('/drives/'+drv+'/root:/'+encodeURIComponent(rec.fname)+':/');
+    });
+  });
 }
 
 /* write the four columns onto the uploaded file.
@@ -751,7 +775,6 @@ window.addEventListener('online',function(){
 });
 
 /* ---------------- tabs / reset ---------------- */
-var uploading = false;
 function show(which){
   var isNew=which==='new';
   $('tabNew').classList.toggle('on',isNew);
