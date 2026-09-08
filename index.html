@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Vesla Vehicle Inspection</title>
+<title>Vesla Vehicle Inspection — TEST</title>
 <link rel="icon" href="logo.png?v=12">
 <link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,6 +30,10 @@
   .who{margin-left:auto;text-align:right;font-family:'JetBrains Mono',monospace;
     font-size:11px;color:var(--ink-dim);line-height:1.5}
   .who b{color:var(--gold);font-weight:600}
+
+  .testflag{background:var(--alert);color:#0B0C0E;text-align:center;
+    font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;
+    padding:5px}
 
   /* tabs */
   nav{display:flex;border-bottom:1px solid var(--line);background:#0B0C0E;
@@ -68,6 +72,7 @@
   .bay{margin-top:26px;border-radius:18px;border:2px dashed var(--line);
     background:var(--panel);padding:30px 22px;text-align:center;transition:.2s}
   .bay.filled{border-style:solid;border-color:var(--ready);background:var(--panel-2)}
+  .bay.recording{border-style:solid;border-color:var(--alert)}
   .bay-eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;
     color:var(--ink-dim);font-weight:600}
   .bay-eyebrow b{color:var(--gold);font-weight:600}
@@ -79,6 +84,29 @@
   .trigger-label{margin-top:14px;font-size:17px;font-weight:800;letter-spacing:.05em}
   .hint{margin-top:8px;font-size:13px;color:var(--ink-dim);line-height:1.5}
   video{width:100%;max-height:280px;border-radius:12px;background:#000;margin-top:6px;display:block}
+
+  /* live camera */
+  #live{max-height:340px;object-fit:cover}
+  .stopbtn{margin:16px auto 0;width:118px;height:118px;border-radius:50%;
+    border:3px solid var(--alert);background:rgba(255,107,90,.12);
+    display:grid;place-items:center;cursor:pointer}
+  .stopbtn:active{transform:scale(.95)}
+  .stopbtn .sq{width:48px;height:48px;border-radius:8px;background:var(--alert)}
+  .startbtn{margin:16px auto 0;width:118px;height:118px;border-radius:50%;
+    border:3px solid var(--gold);background:rgba(242,194,48,.09);
+    display:grid;place-items:center;cursor:pointer}
+  .startbtn:active{transform:scale(.95)}
+  .startbtn .dot{width:66px;height:66px;border-radius:50%;background:var(--gold)}
+  .timer{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:600;
+    margin-top:14px;letter-spacing:.06em}
+  .timer.rec{color:var(--alert)}
+  .reclamp{display:inline-block;width:11px;height:11px;border-radius:50%;
+    background:var(--alert);margin-right:9px;vertical-align:middle;
+    animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .cancelrec{margin-top:16px;background:none;border:1px solid var(--line);
+    color:var(--ink-dim);padding:11px 22px;border-radius:10px;
+    font-family:'Archivo',sans-serif;font-size:14px;font-weight:600;cursor:pointer}
 
   .readout{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
   .chip{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;
@@ -210,6 +238,7 @@ if(typeof msal==='undefined'){
 <body>
 
 <div id="app" style="display:none">
+<div class="testflag">Test build — in-app recording</div>
 <header>
   <img class="shield" src="logo.png?v=12" alt="Vesla">
   <div class="brand">VESLA<span>Vehicle Inspection · VRC</span></div>
@@ -249,14 +278,27 @@ if(typeof msal==='undefined'){
 
   <div class="bay" id="bay">
     <div class="bay-eyebrow" id="bayLabel">Step 5 · <b>Record the walkaround</b></div>
+
+    <!-- idle -->
     <div id="empty">
       <div class="trigger" id="trigger"><div class="dot"></div></div>
       <div class="trigger-label">Record video</div>
-      <div class="hint">Opens the camera. Walk once around the vehicle.<br>Up to 7 minutes.</div>
+      <div class="hint">Records in the app at a small file size.<br>Walk once around the vehicle. Up to 4 minutes.</div>
       <div class="orline"><span>or</span></div>
       <button class="pickbtn" id="pick">Choose a video already recorded</button>
-      <div class="hint" style="margin-top:8px">For long videos, record with the Camera app first,<br>then choose it here.</div>
+      <div class="hint" style="margin-top:8px">Only if the camera will not open.<br>Files chosen this way can be very large.</div>
     </div>
+
+    <!-- live camera -->
+    <div id="camera" style="display:none">
+      <video id="live" autoplay muted playsinline></video>
+      <div class="timer" id="timer">0:00</div>
+      <div class="startbtn" id="startRec"><div class="dot"></div></div>
+      <div class="trigger-label" id="recLabel">Start recording</div>
+      <button class="cancelrec" id="cancelRec">Cancel</button>
+    </div>
+
+    <!-- recorded -->
     <div id="filled" style="display:none">
       <video id="preview" controls playsinline></video>
       <div class="readout" id="readout"></div>
@@ -345,7 +387,7 @@ if(typeof msal==='undefined'){
   <div style="text-align:center;max-width:360px">
     <img src="logo.png?v=12" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
     <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
-    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 12</span></p>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 13 · TEST</span></p>
     <button id="signinBtn" class="again" style="width:100%">Sign in</button>
     <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
   </div>
@@ -383,6 +425,21 @@ var CFG = {
   listId   : "a8435e64-35de-4b0c-8560-e8504c8e67cd",
   library  : "Vehicle Inspection Videos",
   chunkMB  : 20
+};
+
+/* ==========================================================
+   RECORDING QUALITY — this is what controls the file size.
+   1500000 = 1.5 Mbps ≈ 11 MB per minute.
+   Raise to 2500000 for sharper video and bigger files.
+   Lower to 1000000 for smaller files and softer video.
+   ========================================================== */
+var REC = {
+  width      : 1280,
+  height     : 720,
+  frameRate  : 24,
+  videoBps   : 1500000,
+  audioBps   : 64000,
+  maxSeconds : 240
 };
 /* ========================================================== */
 
@@ -515,10 +572,10 @@ function keepAwake(on){
 }
 /* re-acquire if Android drops it when the tab is backgrounded */
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='visible' && uploading) keepAwake(true);
+  if(document.visibilityState==='visible' && (uploading||recording)) keepAwake(true);
 });
 
-var state={type:null,file:null,url:null,dur:null};
+var state={type:null,file:null,url:null,dur:null,ext:'mp4'};
 var records=[];      // saved (from SharePoint) + local pending
 
 function pick(t){
@@ -529,23 +586,178 @@ function pick(t){
 }
 $('checkin').onclick=function(){pick('Check-In')};
 $('checkout').onclick=function(){pick('Check-Out')};
-$('trigger').onclick=function(){$('file').click()};
-$('redo').onclick=function(){ $('empty').style.display=''; $('filled').style.display='none'; };
 
+/* ==========================================================
+   IN-APP RECORDING
+   The camera is opened by the app itself, so every phone
+   produces the same small file no matter what its own
+   camera settings are.
+   ========================================================== */
+var camStream=null, recorder=null, chunks=[], recording=false;
+var recStart=0, tick=null, recMime='', recExt='mp4';
+
+function bestMime(){
+  var want=[
+    'video/mp4;codecs=h264,aac',
+    'video/mp4',
+    'video/webm;codecs=h264,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
+  for(var i=0;i<want.length;i++){
+    try{ if(window.MediaRecorder && MediaRecorder.isTypeSupported(want[i])) return want[i] }catch(e){}
+  }
+  return '';
+}
+
+function openCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder){
+    alert('This device cannot record inside the app. Use "Choose a video already recorded" instead.');
+    return;
+  }
+  $('empty').style.display='none';
+  $('camera').style.display='block';
+  $('bayLabel').innerHTML='Step 5 · <b>Camera ready</b>';
+  navigator.mediaDevices.getUserMedia({
+    video:{
+      facingMode:{ideal:'environment'},
+      width:{ideal:REC.width}, height:{ideal:REC.height},
+      frameRate:{ideal:REC.frameRate}
+    },
+    audio:true
+  }).then(function(s){
+    camStream=s;
+    $('live').srcObject=s;
+  }).catch(function(e){
+    closeCamera();
+    alert('Camera did not open: '+e.message+
+      '\n\nUse "Choose a video already recorded" instead.');
+  });
+}
+
+function closeCamera(){
+  if(tick){ clearInterval(tick); tick=null }
+  if(camStream){ camStream.getTracks().forEach(function(t){t.stop()}); camStream=null }
+  $('live').srcObject=null;
+  $('camera').style.display='none';
+  $('bay').classList.remove('recording');
+  recording=false;
+  $('recLabel').textContent='Start recording';
+  $('startRec').className='startbtn';
+  $('startRec').innerHTML='<div class="dot"></div>';
+  $('timer').className='timer';
+  $('timer').textContent='0:00';
+}
+
+function startRec(){
+  if(!camStream) return;
+  recMime=bestMime();
+  recExt = recMime.indexOf('mp4')>-1 ? 'mp4' : 'webm';
+  var opts={ videoBitsPerSecond:REC.videoBps, audioBitsPerSecond:REC.audioBps };
+  if(recMime) opts.mimeType=recMime;
+  try{ recorder=new MediaRecorder(camStream,opts) }
+  catch(e){
+    try{ recorder=new MediaRecorder(camStream) ; recExt='webm' }
+    catch(e2){ alert('Cannot record on this device: '+e2.message); closeCamera(); return }
+  }
+  chunks=[];
+  recorder.ondataavailable=function(ev){ if(ev.data && ev.data.size) chunks.push(ev.data) };
+  recorder.onstop=function(){ finishRec() };
+  recorder.start(1000);
+  recording=true; recStart=Date.now();
+  keepAwake(true);
+  $('bay').classList.add('recording');
+  $('bayLabel').innerHTML='Step 5 · <b style="color:var(--alert)">Recording</b>';
+  $('startRec').className='stopbtn';
+  $('startRec').innerHTML='<div class="sq"></div>';
+  $('recLabel').textContent='Stop recording';
+  $('timer').className='timer rec';
+  tick=setInterval(function(){
+    var s=Math.floor((Date.now()-recStart)/1000);
+    $('timer').innerHTML='<span class="reclamp"></span>'+fmt(s);
+    if(s>=REC.maxSeconds) stopRec();
+  },250);
+}
+
+function stopRec(){
+  if(!recorder || recorder.state==='inactive') return;
+  if(tick){ clearInterval(tick); tick=null }
+  try{ recorder.stop() }catch(e){}
+}
+
+function finishRec(){
+  var secs=(Date.now()-recStart)/1000;
+  var type=recMime||'video/webm';
+  var blob=new Blob(chunks,{type:type});
+  chunks=[];
+  if(camStream){ camStream.getTracks().forEach(function(t){t.stop()}); camStream=null }
+  $('live').srcObject=null;
+  $('camera').style.display='none';
+  $('bay').classList.remove('recording');
+  recording=false;
+  keepAwake(false);
+
+  if(!blob.size){
+    alert('Nothing was recorded. Try again.');
+    $('empty').style.display='';
+    $('bayLabel').innerHTML='Step 5 · <b>Record the walkaround</b>';
+    return;
+  }
+  var f=new File([blob],'walkaround.'+recExt,{type:type});
+  useVideo(f,recExt,secs);
+}
+
+$('trigger').onclick=openCamera;
+$('startRec').onclick=function(){ recording?stopRec():startRec() };
+$('cancelRec').onclick=function(){
+  if(recording){ if(!confirm('Stop and discard this recording?')) return;
+    try{ recorder.onstop=null; recorder.stop() }catch(e){} }
+  closeCamera();
+  $('empty').style.display='';
+  $('bayLabel').innerHTML='Step 5 · <b>Record the walkaround</b>';
+};
+$('redo').onclick=function(){
+  $('filled').style.display='none';
+  $('bay').classList.remove('filled');
+  $('empty').style.display='';
+  $('bayLabel').innerHTML='Step 5 · <b>Record the walkaround</b>';
+  state.file=null; state.url=null; state.dur=null;
+  sync();
+};
+
+/* fallback: pick an existing file */
 $('pick').onclick=function(){$('fileLib').click()};
 $('fileLib').onchange=function(e){ handleFile(e) };
 $('file').onchange=function(e){ handleFile(e) };
 function handleFile(e){
   var f=e.target.files&&e.target.files[0]; if(!f) return;
-  state.file=f; state.url=URL.createObjectURL(f);
+  var ext=(f.name.split('.').pop()||'mp4').toLowerCase();
+  if(ext.length>4) ext='mp4';
+  useVideo(f,ext,null);
+}
+
+/* shared by both paths */
+function useVideo(f,ext,knownSecs){
+  state.file=f; state.ext=ext;
+  if(state.url){ try{ URL.revokeObjectURL(state.url) }catch(e){} }
+  state.url=URL.createObjectURL(f);
   $('preview').src=state.url;
-  $('empty').style.display='none'; $('filled').style.display='block';
+  $('empty').style.display='none';
+  $('camera').style.display='none';
+  $('filled').style.display='block';
   $('bay').classList.add('filled');
   $('bayLabel').innerHTML='Step 5 · <b>Video recorded</b>';
-  $('readout').innerHTML='<div class="chip">SIZE <b>'+(f.size/1048576).toFixed(1)+' MB</b></div>';
+  var mb=(f.size/1048576).toFixed(1);
+  var sizeCls = f.size>200*1048576 ? ' warn' : ' ok';
+  $('readout').innerHTML='<div class="chip'+sizeCls+'">SIZE <b>'+mb+' MB</b></div>';
+  if(knownSecs){
+    state.dur=knownSecs;
+    $('readout').insertAdjacentHTML('beforeend',
+      '<div class="chip ok">LENGTH <b>'+fmt(knownSecs)+'</b></div>');
+  }
   $('preview').onloadedmetadata=function(){
     var d=$('preview').duration;
-    if(isFinite(d)){ state.dur=d;
+    if(isFinite(d) && !knownSecs){ state.dur=d;
       $('readout').insertAdjacentHTML('beforeend',
         '<div class="chip'+(d>450?' warn':' ok')+'">LENGTH <b>'+fmt(d)+'</b></div>'); }
   };
@@ -574,6 +786,7 @@ $('submit').onclick=function(){
     plate:$('plate').value.trim().toUpperCase(),
     type:state.type, driver:$('driver').value,
     file:state.file, url:state.url, size:state.file.size,
+    ext:state.ext||'mp4',
     dur:state.dur, at:now, status:'uploading', sent:0, local:true
   };
   records.unshift(rec);
@@ -587,7 +800,7 @@ function upload(rec,fg){
   uploading = true; keepAwake(true);
   rec.status='uploading'; updateCount(); renderList();
   var name=(rec.plate+'_'+rec.agreement+'_'+rec.type+'_'+
-            rec.at.toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp4')
+            rec.at.toISOString().slice(0,19).replace(/[:T]/g,'-')+'.'+(rec.ext||'mp4'))
             .replace(/[#%*<>?/\\|"]/g,'');
 
   rec.fname=name;
@@ -787,14 +1000,15 @@ function show(which){
   if(!isNew){ renderList(); if(!uploading) loadFromSharePoint() }
 }
 $('tabNew').onclick=function(){ resetToForm(); show('new') };
-$('tabList').onclick=function(){ show('list') };
+$('tabList').onclick=function(){ if(recording){ alert('Stop the recording first.'); return } show('list') };
 $('again').onclick=function(){ resetToForm(); show('new') };
 
 function resetToForm(){
+  closeCamera();
   $('done').classList.remove('show'); $('uploading').classList.remove('show');
   $('failed').classList.remove('show');
   $('barFill').style.width='0'; $('pct').textContent='0%';
-  state={type:null,file:null,url:null,dur:null};
+  state={type:null,file:null,url:null,dur:null,ext:'mp4'};
   $('agreement').value=''; $('plate').value=''; $('driver').value='';
   $('checkin').setAttribute('aria-pressed',false);
   $('checkout').setAttribute('aria-pressed',false);
@@ -888,6 +1102,11 @@ function open(r){
   });
 }
 $('mClose').onclick=function(){ $('mVideo').pause(); $('modal').classList.remove('show') };
+
+/* don't lose a recording by leaving the page */
+window.addEventListener('beforeunload',function(e){
+  if(recording || uploading){ e.preventDefault(); e.returnValue='' }
+});
 })();
 </script>
 </body>
