@@ -383,7 +383,7 @@ if(typeof msal==='undefined'){
   <div style="text-align:center;max-width:360px">
     <img src="logo.png?v=12" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
     <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
-    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 13</span></p>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 14</span></p>
     <button id="signinBtn" class="again" style="width:100%">Sign in</button>
     <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
   </div>
@@ -927,22 +927,35 @@ function setFields(item,rec){
 /* ---------------- read back ---------------- */
 function loadFromSharePoint(){
   $('listBody').innerHTML='<div class="empty"><div>◌</div><p style="margin:0">Loading…</p></div>';
-  getDrive().then(function(){
-    return graph("/sites/"+CFG.siteId+"/lists/"+CFG.listId+
-      "/items?$expand=fields&$top=200");
-  }).then(function(d){
-    var got=(d.value||[]).map(function(it){
-      var f=it.fields||{};
-      return {
-        id:it.id, itemId:it.id,
-        agreement:f.AgreementNo||'—',
-        plate:f.PlateNo||'—',
-        type:f.InspectionType||'—',
-        driver:f.Drivername||'—',
-        at:new Date(f.InspectionDate||it.createdDateTime),
-        size:0, status:'saved', webUrl:it.webUrl
-      };
+  var got=[];
+  /* SharePoint returns one page at a time. Follow @odata.nextLink until
+     every item is in, otherwise the list stops at the first page. */
+  function page(url){
+    return graph(url).then(function(d){
+      (d.value||[]).forEach(function(it){
+        var f=it.fields||{};
+        got.push({
+          id:it.id, itemId:it.id,
+          agreement:f.AgreementNo||'—',
+          plate:f.PlateNo||'—',
+          type:f.InspectionType||'—',
+          driver:f.Drivername||'—',
+          at:new Date(f.InspectionDate||it.createdDateTime),
+          size:0, status:'saved', webUrl:it.webUrl
+        });
+      });
+      var next=d["@odata.nextLink"];
+      if(next && got.length<5000){
+        $('listBody').innerHTML='<div class="empty"><div>◌</div>'+
+          '<p style="margin:0">Loading… '+got.length+'</p></div>';
+        return page(next);
+      }
     });
+  }
+  getDrive().then(function(){
+    return page("/sites/"+CFG.siteId+"/lists/"+CFG.listId+
+      "/items?$expand=fields&$top=999");
+  }).then(function(){
     got.sort(function(a,b){ return b.at - a.at });
     records=records.filter(function(r){return r.local}).concat(got);
     updateCount(); renderList();
