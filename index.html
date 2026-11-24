@@ -389,7 +389,7 @@ if(typeof msal==='undefined'){
   <div style="text-align:center;max-width:360px">
     <img src="logo.png?v=12" alt="Vesla" style="width:120px;height:132px;object-fit:contain;margin:0 auto 20px;display:block">
     <h1 style="font-size:22px;font-weight:800;letter-spacing:.1em;margin:0 0 6px">VESLA</h1>
-    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 15</span></p>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0 0 28px">Vehicle Inspection · VRC<br><span style="font-size:11px;opacity:.6">build 16</span></p>
     <button id="signinBtn" class="again" style="width:100%">Sign in</button>
     <p id="gateErr" style="color:var(--alert);font-size:13px;margin-top:16px"></p>
   </div>
@@ -789,7 +789,7 @@ $('submit').onclick=function(){
     agreement:$('agreement').value.trim().toUpperCase(),
     plate:$('plate').value.trim().toUpperCase(),
     type:state.type, driver:$('driver').value,
-    upDate:$('upDate').value,
+    upDate:$('upDate').value, upAt:new Date($('upDate').value+'T12:00:00Z'),
     file:state.file, url:state.url, size:state.file.size,
     ext:state.ext||'mp4',
     dur:state.dur, at:now, status:'uploading', sent:0, local:true
@@ -951,6 +951,7 @@ function loadFromSharePoint(){
           type:f.InspectionType||'—',
           driver:f.Drivername||'—',
           at:new Date(f.InspectionDate||it.createdDateTime),
+          upAt:f.UploadingDate?new Date(f.UploadingDate):null,
           size:0, status:'saved', webUrl:it.webUrl
         });
       });
@@ -1045,9 +1046,10 @@ function matches(r){
   if(filter!=='All' && r.type!==filter) return false;
   var q=$('q').value.trim().toLowerCase(); if(!q) return true;
   var hay=(r.plate+' '+r.agreement+' '+r.driver+' '+
-           r.at.toLocaleDateString('en-GB')).toLowerCase();
+           r.at.toLocaleDateString('en-GB')+' '+(r.upAt?r.upAt.toLocaleDateString('en-GB'):'')).toLowerCase();
   return q.split(/\s+/).every(function(w){return hay.indexOf(w)>-1});
 }
+function upTxt(r){ return r.upAt?' · Uploaded '+r.upAt.toLocaleDateString('en-GB'):'' }
 function byId(id){ return records.filter(function(x){return x.id===id})[0] }
 
 function renderList(){
@@ -1078,7 +1080,7 @@ function renderList(){
       '<div class="top">'+r.plate+' · '+r.agreement+'</div>'+
       '<div class="sub">'+r.at.toLocaleDateString('en-GB')+' · '+
         r.at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+
-        ' · '+r.driver+(r.size?' · '+(r.size/1048576).toFixed(0)+' MB':'')+'</div>'+
+        upTxt(r)+' · '+r.driver+(r.size?' · '+(r.size/1048576).toFixed(0)+' MB':'')+'</div>'+
       badge+'</div>'+
       (r.status==='failed'
         ? '<button class="retry" data-retry="'+r.id+'">Retry</button>'
@@ -1105,7 +1107,7 @@ Array.prototype.forEach.call(document.querySelectorAll('.filt'),function(b){
 function open(r){
   $('mTitle').textContent=r.plate+' · '+r.agreement;
   $('mWhen').textContent=r.type+' · '+r.at.toLocaleDateString('en-GB')+' '+
-    r.at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+' · '+r.driver;
+    r.at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+upTxt(r)+' · '+r.driver;
   $('mMeta').innerHTML='';
   if(r.url){ $('mVideo').src=r.url; $('modal').classList.add('show'); return }
   $('mVideo').removeAttribute('src');
